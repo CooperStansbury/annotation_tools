@@ -10,10 +10,6 @@ import re
 import xlsxwriter
 from datetime import datetime
 
-def get_date():
-    """ return  today's date as an appendable string"""
-    return datetime.today().strftime("%m-%d-%Y")
-
 
 class DataTurkAnnotations():
     """A class to process annotations from DataTurks 
@@ -30,7 +26,10 @@ class DataTurkAnnotations():
         else:
             pass
 
-    
+    def get_date(self):
+        """ return  today's date as an appendable string"""
+        return datetime.today().strftime("%m-%d-%Y")
+
     def get_JSON_data(self, json_path):
         """A method to return a dataframe with file IDs, sentences,
         and annotation text from a JSON DataTurk output """
@@ -143,7 +142,6 @@ class DataTurkAnnotations():
         df['sentence_text'] = self.sentence_frame['sentence_text']
         df['sentence_start'] = self.sentence_frame['sentence_start']
         df['file_id'] = self.sentence_frame['file_id']
-        df['annotation'] = None
         
         df.reset_index()
         
@@ -159,13 +157,15 @@ class DataTurkAnnotations():
         # by different "annotators"
         for src in self.source_map.values():
             df[src] = None
+            df[f"{src}_annotation"] = None
     
         for idx, annotation in self.annotations.iterrows():
             # filter by file first 
             file_matches = df[df['file_id'] == annotation['file_id']]
             
             # find the closest starting position
-            closest_pos = min(file_matches['sentence_start'], key=lambda x:abs(x-annotation['start_char']))
+            closest_pos = min(file_matches['sentence_start'],
+                              key=lambda x:abs(x-annotation['start_char']))
             
             # get corresponding record
             # we'll just us the index information for now
@@ -175,19 +175,25 @@ class DataTurkAnnotations():
             annotator = self.source_map[annotation['json_source_file']]
             
             # set the values of the 'under construction' dataframe
-            # including stroing the actual annotation
             df.loc[match.index, annotator] = str(annotation['labels'])
-            df.loc[match.index, 'annotation'] = str(annotation['text'])
+            
+            # including stroing the actual annotation
+            df.loc[match.index, f'{annotator}_annotation'] = annotation['text']
+            
             
         return df
     
     
-def write_report(df, save_path=f"output/{get_date()}_map.xlsx"):
-    """A function to write an xlsx file based on an input dataframe"""
-    
-    with pd.ExcelWriter(save_path, engine='xlsxwriter', mode='w') as writer:
-        df.to_excel(writer, sheet_name='Sheet 1', index=False)
-        writer.save()
+    def write_report(self, df, save_path=None):
+        """A function to write an xlsx file based on an input dataframe"""
+        
+        if save_path is None:
+            save_path = f"output/{self.get_date()}_map.xlsx"
+
+        with pd.ExcelWriter(save_path, engine='xlsxwriter', mode='w') as writer:
+            df.to_excel(writer, sheet_name='Sheet 1', index=False)
+            writer.save()
+            print(f"Saved output to: {save_path}")
         
     
         
@@ -208,7 +214,7 @@ if __name__ == "__main__":
     dataturks = DataTurkAnnotations(json_dir_path)
     
     # save the report
-    write_report(dataturks.annotation_map)
+    dataturks.write_report(dataturks.annotation_map)
     
     
     
