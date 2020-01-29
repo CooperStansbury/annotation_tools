@@ -23,8 +23,13 @@ if __name__ == "__main__":
     # build the annotation class
     dataturks = dtAnnotator.DataTurkAnnotations(args.dir, args.nlp_lib)
     
+    # simpler report
+    save_path = f"output/{dataturks.get_date()}_map.csv"
+    dataturks.annotation_map.to_csv(save_path, index=False)
+    print(f"Saved output to: {save_path}")
+    
     # save the report
-    dataturks.write_report(dataturks.annotation_map)
+#     dataturks.write_xlsx_report(dataturks.annotation_map)
     
     
     
