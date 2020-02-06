@@ -39,14 +39,12 @@ class Turk_Parser():
         self.json_files = []
         self.annotators = []
         
-        self.raw_text = defaultdict()
+        self.docs = defaultdict()
         self.annotations = defaultdict()
 
         self.load_json_files(json_dir_path)
         self.load_annotators()
         
-        
-        print(self.annotators)
         # create attributes for each annotator
         [setattr(self, annotator, defaultdict()) for annotator in self.annotators] 
         
@@ -76,100 +74,51 @@ class Turk_Parser():
     def load_annotations(self):
         """A function to load annotations """
         
+        new_rows = []
+        
         for json_file in self.json_files:
+            annotator_name = self._format_annotator_name(json_file)
+            annotator_attr = getattr(self, annotator_name)
             for annotated_file in open(json_file):
-                print(annotated_file)
-            
-        
-#         # Each record/line in the "JSON" file is a separate
-#         # JSON object representing an annotated document. For 
-#         # each document there may be multiple annotations.
-#         for annotated_file in open(json_path):
-#             file_dict = json.loads(annotated_file)
-#             file_content = file_dict['content']
-            
-#             # hash the content (str) into a file_id
-#             file_id = int(hashlib.sha256(file_content.encode('utf-8')).hexdigest(), 16) % 10**8
-            
-#             # store the raw file
-#             self.store_file(file_id, file_content, source_json_file_name)
-            
-#             # 'Handle' missing annotations
-#             if file_dict['annotation'] is not None:
-#                 for annotation in file_dict['annotation']:
-#                     labels = annotation['label']
+                
+                json_dump = json.loads(annotated_file)
+                
+                # save the file by a doc_id 
+                content = json_dump['content']
+                doc_id = int(hashlib.sha256(content.encode('utf-8')).hexdigest(), 16)
+                
+                if not doc_id in self.docs:            
+                    self.docs[doc_id] = content
+                
+                # 'Handle' missing annotations
+                if json_dump['annotation'] is not None:
                     
-#                     # it seems like I could always assume a single 
-#                     # point per label, but best to be robust...
-#                     for pt in annotation['points']:
-#                         start_char = pt['start']
-#                         end_char = pt['end']
-#                         text = pt['text']
-                        
-#                         record = {
-#                             'json_source_file':source_json_file_name,
-#                             'file_id': file_id,
-#                             'labels':labels,
-#                             'start_char':start_char,
-#                             'end_char':end_char,
-#                             'text':text
-#                         }
-#                         # add new record
-#                         new_records.append(record)
-            
-#         return pd.DataFrame(new_records)
-    
-    
-#     def load_annotations(self):
-#         """A method to load JSON-like objects into memory"""
-#         # create data frames for all annotations
-#         df_list = []
-#         for file in self.json_file_list:
-#             print(f"Processing {file}")
-#             df_list.append(self.get_JSON_data(file))
-            
-#         # concatenate all df from different source
-#         # files into a single data frame
-#         return pd.concat(df_list, ignore_index=True, sort=False)
-    
-    
-#     def clean_sentence(self, sent):
-#         """A function to perform text processing on raw data to new field """
-#         sent = str(sent).strip().encode(encoding = 'ascii',errors = 'replace')
-#         sent = sent.decode(encoding='ascii',errors='strict')
-#         sent = str(sent).replace("?", " ")
-#         # strip redundant whitespace
-#         sent = re.sub(' +', ' ', sent)
-#         return sent
-    
-    
-#     def build_sentence_frame(self):
-#         """A method to build a dataframe of sentences for all files """
-#         df_list = []
-#         for file_id, file_content in self.files.items():
-#             doc = file_content['spacy_doc']
-            
-#             # clean sentences
-# #             sentences = [self.clean_sentence(i) for i in list(doc.sents)]
+                    label_count = 0
+                    for label in json_dump['annotation']:
+                        label_list = label['label']
 
-#             tmp_df = pd.DataFrame({"sentence": list(doc.sents)}) 
-#             tmp_df['file_id'] = file_id
-#             df_list.append(tmp_df)
-          
-#         # all files in one frame
-#         df = pd.concat(df_list, ignore_index=True, sort=False)
+                        # it seems like I could always assume a single 
+                        # point per label, but best to be robust...
+                        for pt in label['points']:
+                            label_count += 1
+                            start_char = pt['start']
+                            end_char = pt['end']
+                            text = pt['text']
+
+                            record = {
+                                'doc_id' : doc_id,
+                                'annotation_id':label_count,
+                                'labels':label_list,
+                                'start_char':start_char,
+                                'end_char':end_char,
+                                'text':text
+                            }
+                            
+                            new_rows.append(record)
+                            
+        df = pd.DataFrame(new_rows)
         
-#         # get human readable and start position
-#         df['sentence_text'] = df['sentence'].map(lambda row: self.clean_sentence(row.text))
-#         df['sentence_start'] = df['sentence'].map(lambda row: row.start_char)
-#         return df
-    
-    
-#     def format_annotator_name(self, filename):
-#         """A function to return the formatted name of an annotator given a consistently 
-#         named file:
-        
-#         Note: this depends on files named like `_NAME.json`
-#         """
-#         return filename.split("_")[-1].split(".")[0].upper()
+        df.to_csv("tmp.csv")
+                            
+                
     

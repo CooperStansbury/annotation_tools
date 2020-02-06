@@ -24,7 +24,7 @@ if __name__ == "__main__":
     turks = TurkParser.Turk_Parser(args.dir, args.nlp_lib)
     
     
-#     print(dir(turks))
+    [print(k,v, '\n') for k,v in turks.LIZ.items()]
     
     
    
