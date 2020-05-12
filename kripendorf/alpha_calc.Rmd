@@ -5,7 +5,8 @@ date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
   pdf_document:
     highlight: tango
-    number_sections: no
+    number_sections: yes
+    toc: yes
     keep_md: no
 ---
 
@@ -14,77 +15,176 @@ output:
 knitr::opts_chunk$set(error = TRUE)
 ```
 
+# Preliminaries
 
-# Software Dependencies
+## Software Dependencies
+
+Here are the packages used in this analysis.
 
 ```{r imports, message=FALSE, warning=FALSE}
 library("irr")
 library("boot")
+library("knitr")
+library("psych")
 ```
 
-# Loading Data
+## Note on Confidence Intervals and Contrast Weights
 
-Note that blanks are explicitly represented im this example, though the software documentation for `kripp.alpha()` in the "irr" package (shown in Appendix I) shows non-annotated blanks as `NA`. This makes a substantial difference (shown below). This data structure must be transponsed before input into the `kripp.alpha()` function. 
+In this document condifence intervals are computed for default $\alpha = 0.05$. Contrasts weights are defaults also, see the Cohen's Kappa sections for ordinal coding details. 
+
+
+## Loading/Coding Annotations
+
+For `AB.separate` the coding is as follows:
+- A = 1
+- B = 2
+- Blank = 3
+
+For `AB.together` the coding is as follows:
+- AB = 1
+- Blank = 2
 
 ```{r Load Data}
-rater.data <- read.csv("ANNOTATIONS.csv")
-head(rater.data)
+AB.separate <- read.csv("AB_separate.csv")
+AB.together <- read.csv("AB_together.csv")
+
+knitr::kable(head(AB.separate),
+             caption='Annotations A/B Separate')
+
+knitr::kable(head(AB.together),
+             caption='Annotations A/B Together')
 ```
+
+# Cohen’s Kappas (pairwise)
+
+## Weighted and Unweighted Cohen's for A/B Separately
+
+For each pair of annotators we calculate Cohen's Kappa (weighted and unweighted). Note that the weight matrix used is as follows:
+
+```{r separate kappa weights, echo=FALSE}
+t <- cohen.kappa(AB.separate[, c('LIZ', 'KATHLEEN')])
+knitr::kable(t$weight,
+             caption="Weights Used for Cohen's Kappa")
+```
+
+
+```{r separate Cohen Kappa}
+liz.kath <- cohen.kappa(AB.separate[, c('LIZ', 'KATHLEEN')])
+knitr::kable(liz.kath$confid, 
+             caption="Liz v. Kathleen Cohen's Kappa (weighted and weighted)",
+             digits = 4)
+
+liz.kay <- cohen.kappa(AB.separate[, c('LIZ', 'KAYCEE')])
+knitr::kable(liz.kay$confid, 
+             caption="Liz v. Kaycee Cohen's Kappa (weighted and weighted)",
+             digits = 4)
+
+kath.kay <- cohen.kappa(AB.separate[, c('KATHLEEN', 'KAYCEE')])
+knitr::kable(kath.kay$confid, 
+             caption="Kathleen v. Kaycee Cohen's Kappa (weighted and weighted)",
+             digits = 4)
+```
+
+
+## Weighted and Unweighted Cohen's for A/B Together
+
+The weight matrix used is as follows:
+
+```{r together kappa weights, echo=FALSE}
+t <- cohen.kappa(AB.together[, c('LIZ', 'KATHLEEN')])
+knitr::kable(t$weight,
+             caption="Weights Used for Cohen's Kappa")
+```
+
+
+```{r together Cohen Kappa}
+liz.kath <- cohen.kappa(AB.together[, c('LIZ', 'KATHLEEN')])
+knitr::kable(liz.kath$confid, 
+             caption="Liz v. Kathleen Cohen's Kappa (weighted and weighted)",
+             digits = 4)
+
+
+liz.kay <- cohen.kappa(AB.together[, c('LIZ', 'KAYCEE')])
+knitr::kable(liz.kay$confid, 
+             caption="Liz v. Kaycee Cohen's Kappa (weighted and weighted)",
+             digits = 4)
+
+kath.kay <- cohen.kappa(AB.together[, c('KATHLEEN', 'KAYCEE')])
+knitr::kable(kath.kay$confid, 
+             caption="Kathleen v. Kaycee Cohen's Kappa (weighted and weighted)",
+             digits = 4)
+```
+
 
 # Krippendorff’s alpha
 
 This is the `kripp.alpha()` function from: [https://cran.r-project.org/web/packages/irr/irr.pdf](https://cran.r-project.org/web/packages/irr/irr.pdf) run on the data where blanks are explcitly coded (not `NA`). We provide both nominal and ordinal estimates. From the supplementary material of the foillowing publication we find this a note indicating the lack of confidence intervals for this function, as well as small estimation errors due to the lack of `NA` values. It is worth noting that similar behavior is seen in the Python package `krippendorff`.
 
-1. Zapf A, Castell S, Morawietz L, Karch A. Measuring inter-rater reliability for nominal data – which coefficients and confidence intervals are appropriate? BMC Medical Research Methodology. 2016 Aug 5;16(1):93. 
+1. Zapf A, Castell S, Morawietz L, Karch A. Measuring inter-rater reliability for nominal data – which coefficients and confidence intervals are appropriate? BMC Medical Research Methodology. 2016 Aug 5;16(1):93.
 
 _"In R (R Core Team, Vienna, Austria) there is the package irr (version 0.84) from Gamer et al. [2], which calculates Fleiss’ K and Krippendorff’s alpha, but both without confidence intervals. There is a small error in the estimation of the coincidence matrix for Krippendorff’s alpha if there are no missing values. In the upcoming actualized version this error will be corrected (personal communication). An R-program for the calculation of Krippendorffs alpha with the standard bootstrap confidence interval as applied by us was written by Gruszczynski and can be downloaded via GitHub [3]."_
 
-```{r kripp with blanks}
-kripp.alpha(t(rater.data), "nominal")
-kripp.alpha(t(rater.data), "ordinal")
+# Krippendorff’s alpha A/B Separate 
+
+```{r separate Krippendorff, message=FALSE, warning=FALSE}
+kripp.alpha(t(AB.separate), "nominal")
+kripp.alpha(t(AB.separate), "ordinal")
 ```
 
-## Confidence Intervals 
+## Krippendorff’s alpha A/B Together
+
+Oridinal and nominal weight matrices will be identical in this case.
+
+```{r together Krippendorff, message=FALSE, warning=FALSE}
+kripp.alpha(t(AB.together), "nominal")
+```
+
+
+
+## Booptstrapped Confidence Intervals
 
 We'll rely on this post ( [https://stackoverflow.com/questions/41944703](https://stackoverflow.com/questions/41944703) ) to using bootstrapiing to build confidence intervals, since the "irr" function doesn't return them. Below is the bootstrapped confidence interval for Krippendorff’s alpha:
 
-```{r CI, message=FALSE, warning=FALSE}
-alpha.boot <- function(d,w) {
-      data <- t(d[w,])
-      kripp.alpha(data)$value
+```{r bootstrapper, message=FALSE, warning=FALSE}
+nominal.alpha <- function(d, w){
+  #' a function bootstrap nominal coding of
+  #' Krippendorff’s alpha
+  data <- t(d[w,])
+  kripp.alpha(data, 'nominal')$value 
 }
 
-b <- boot(data = rater.data, statistic = alpha.boot, R = 1000)
-bs
+oridinal.alpha <- function(d, w) {
+  #' a function bootstrap nominal coding of
+  #' Krippendorff’s alpha
+      data <- t(d[w,])
+      kripp.alpha(data, 'ordinal')$value
+}
+```
+
+### A/B Separate, Coded Nominally
+
+```{r separate nominal, message=FALSE, warning=FALSE}
+b <- boot(data = AB.separate, statistic = nominal.alpha, R = 1000)
+b
 plot(b)
 boot.ci(b, type = "perc")
 ```
 
-# Differences in Coding 
+### A/B Separate, Coded Ordinally
 
-Here we repeat the above, but with blank annotations represented as `NA` values. Note the surprising results when done this way. 
-
-```{r NA Coding, message=FALSE, warning=FALSE}
-rater.data <- read.csv("ANNOTATIONS_NA_CODED.csv")
-head(rater.data)
-
-kripp.alpha(t(rater.data), "nominal")
-kripp.alpha(t(rater.data), "ordinal")
+```{r separate ordinal, message=FALSE, warning=FALSE}
+b <- boot(data = AB.separate, statistic = oridinal.alpha, R = 1000)
+b
+plot(b)
+boot.ci(b, type = "perc")
 ```
 
+### A/B Together, Coded Norminally
 
-# Appendix I From Documentation
-
-Example from: [https://www.rdocumentation.org/packages/irr/versions/0.84.1/topics/kripp.alpha](https://www.rdocumentation.org/packages/irr/versions/0.84.1/topics/kripp.alpha)
-
-```{r Example}
-nmm<-matrix(c(1,1,NA,1,2,2,3,2,3,3,3,3,3,3,3,3,2,2,2,2,1,2,3,4,4,4,4,4,
-1,1,2,1,2,2,2,2,NA,5,5,5,NA,NA,1,1,NA,NA,3,NA),nrow=4)
-# first assume the default nominal classification
-kripp.alpha(nmm)
-# now use the same data with the other three methods
-kripp.alpha(nmm,"ordinal")
-kripp.alpha(nmm,"interval")
-kripp.alpha(nmm,"ratio") 
+```{r together nominal, message=FALSE, warning=FALSE}
+b <- boot(data = AAB.together, statistic = nominal.alpha, R = 1000)
+bs
+plot(b)
+boot.ci(b, type = "perc")
 ```
 
