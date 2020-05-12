@@ -1,0 +1,90 @@
+---
+title: "Krippendorff’s alpha"
+author: "Cooper Stansbury"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  pdf_document:
+    highlight: tango
+    number_sections: no
+    keep_md: no
+---
+
+
+```{r to knit, include=FALSE}
+knitr::opts_chunk$set(error = TRUE)
+```
+
+
+# Software Dependencies
+
+```{r imports, message=FALSE, warning=FALSE}
+library("irr")
+library("boot")
+```
+
+# Loading Data
+
+Note that blanks are explicitly represented im this example, though the software documentation for `kripp.alpha()` in the "irr" package (shown in Appendix I) shows non-annotated blanks as `NA`. This makes a substantial difference (shown below). This data structure must be transponsed before input into the `kripp.alpha()` function. 
+
+```{r Load Data}
+rater.data <- read.csv("ANNOTATIONS.csv")
+head(rater.data)
+```
+
+# Krippendorff’s alpha
+
+This is the `kripp.alpha()` function from: [https://cran.r-project.org/web/packages/irr/irr.pdf](https://cran.r-project.org/web/packages/irr/irr.pdf) run on the data where blanks are explcitly coded (not `NA`). We provide both nominal and ordinal estimates. From the supplementary material of the foillowing publication we find this a note indicating the lack of confidence intervals for this function, as well as small estimation errors due to the lack of `NA` values. It is worth noting that similar behavior is seen in the Python package `krippendorff`.
+
+1. Zapf A, Castell S, Morawietz L, Karch A. Measuring inter-rater reliability for nominal data – which coefficients and confidence intervals are appropriate? BMC Medical Research Methodology. 2016 Aug 5;16(1):93. 
+
+_"In R (R Core Team, Vienna, Austria) there is the package irr (version 0.84) from Gamer et al. [2], which calculates Fleiss’ K and Krippendorff’s alpha, but both without confidence intervals. There is a small error in the estimation of the coincidence matrix for Krippendorff’s alpha if there are no missing values. In the upcoming actualized version this error will be corrected (personal communication). An R-program for the calculation of Krippendorffs alpha with the standard bootstrap confidence interval as applied by us was written by Gruszczynski and can be downloaded via GitHub [3]."_
+
+```{r kripp with blanks}
+kripp.alpha(t(rater.data), "nominal")
+kripp.alpha(t(rater.data), "ordinal")
+```
+
+## Confidence Intervals 
+
+We'll rely on this post ( [https://stackoverflow.com/questions/41944703](https://stackoverflow.com/questions/41944703) ) to using bootstrapiing to build confidence intervals, since the "irr" function doesn't return them. Below is the bootstrapped confidence interval for Krippendorff’s alpha:
+
+```{r CI, message=FALSE, warning=FALSE}
+alpha.boot <- function(d,w) {
+      data <- t(d[w,])
+      kripp.alpha(data)$value
+}
+
+b <- boot(data = rater.data, statistic = alpha.boot, R = 1000)
+bs
+plot(b)
+boot.ci(b, type = "perc")
+```
+
+# Differences in Coding 
+
+Here we repeat the above, but with blank annotations represented as `NA` values. Note the surprising results when done this way. 
+
+```{r NA Coding, message=FALSE, warning=FALSE}
+rater.data <- read.csv("ANNOTATIONS_NA_CODED.csv")
+head(rater.data)
+
+kripp.alpha(t(rater.data), "nominal")
+kripp.alpha(t(rater.data), "ordinal")
+```
+
+
+# Appendix I From Documentation
+
+Example from: [https://www.rdocumentation.org/packages/irr/versions/0.84.1/topics/kripp.alpha](https://www.rdocumentation.org/packages/irr/versions/0.84.1/topics/kripp.alpha)
+
+```{r Example}
+nmm<-matrix(c(1,1,NA,1,2,2,3,2,3,3,3,3,3,3,3,3,2,2,2,2,1,2,3,4,4,4,4,4,
+1,1,2,1,2,2,2,2,NA,5,5,5,NA,NA,1,1,NA,NA,3,NA),nrow=4)
+# first assume the default nominal classification
+kripp.alpha(nmm)
+# now use the same data with the other three methods
+kripp.alpha(nmm,"ordinal")
+kripp.alpha(nmm,"interval")
+kripp.alpha(nmm,"ratio") 
+```
+
