@@ -26,23 +26,64 @@ library("irr")
 library("boot")
 library("knitr")
 library("psych")
+library("tidyverse")
 ```
 
-## Note on Confidence Intervals and Contrast Weights
+## Note on Confidence Intervals and Cohen's Kappa Weights
 
-In this document condifence intervals are computed for default $\alpha = 0.05$. Contrasts weights are defaults also, see the Cohen's Kappa sections for ordinal coding details. 
+In this document condifence intervals are computed for default $\alpha = 0.05$. Contrasts weights are defaults also, see the Cohen's Kappa sections for ordinal coding details. Because there are a large number of ways to perform the weighted Cohen's Kappa, I think it's worth glancing at the following publications [1-2]. Based on this work I think it is important to choose a the correct weight matrix for Cohen's Kappa computations This can be found in Table 3 of the publication cited below. I believe that 'Dichotomous-ordinal' is the correcting weight scheme. As presented by both piublications Warrens MJ. This scheme is as follows:
+
+\begin{table}[!h]
+    \centering
+    \begin{tabular}{|c|c|c|}
+         \hline
+         0 & $w_3$ & $w_2$ \\
+         $w_3$ & 0 & $w_1$ \\
+         $w_2$ & $w_1$ & 0 \\
+         \hline
+    \end{tabular}
+    \caption{Dichotomous-ordinal Weights from Warrens MJ. [1-2]}
+\end{table}
+
+Please note that this is exactly the same as the first scheme labeled 'General symmetric.' The default weights of the `pysch` package are slightly different, and most closely aligns with the 'linear' scheme in the same table, though the diagonals are different.
+
+\begin{table}[!h]
+    \centering
+    \begin{tabular}{|c|c|c|}
+         \hline
+         1 & 0.75 & 0 \\
+         0.75 & 1 & 0.75 \\
+         0 & 0.75 & 1 \\
+         \hline
+    \end{tabular}
+    \caption{`psych` Default Weights}
+\end{table}
+
+1. Warrens MJ. Weighted Kappas for Tables [Internet]. Vol. 2013, Journal of Probability and Statistics. Hindawi; 2013 [cited 2020 May 13]. p. e325831. Available from: https://www.hindawi.com/journals/jps/2013/325831/
+
+2. Warrens MJ. Weighted Kappas for 3 × 3 Tables. Journal of Probability and Statistics. 2013;2013:1–9. 
+
+From the `pysch` package documentation:
+
+On confidence intervals:
+
+_"The confidence intervals are based upon the variance estimates discussed by Fleiss, Cohen, and Everitt who corrected the formulae of Cohen (1968) and Blashfield."_
+
+On weights:
+
+_"Kappa considers the matches on the main diagonal. A penalty function (weight) may be applied to the off diagonal matches. If the weights increase by the square of the distance from the diagonal, weighted kappa is similar to an Intra Class Correlation (ICC). Derivations of weighted kappa are sometimes expressed in terms of similarities, and sometimes in terms of dissimilarities. In the latter case, the weights on the diagonal are 1 and the weights off the diagonal are less than one. In this case, if the weights are 1 - squared distance from the diagonal / k, then the result is similar to the ICC (for any positive k)."_
 
 
 ## Loading/Coding Annotations
 
 For `AB.separate` the coding is as follows:
-- A = 1
+- A = 3
 - B = 2
-- Blank = 3
+- Blank = 1
 
 For `AB.together` the coding is as follows:
-- AB = 1
-- Blank = 2
+- AB = 2
+- Blank = 1
 
 ```{r Load Data}
 AB.separate <- read.csv("AB_separate.csv")
@@ -55,40 +96,89 @@ knitr::kable(head(AB.together),
              caption='Annotations A/B Together')
 ```
 
-# Cohen’s Kappas (pairwise)
+By default, factors are loaded in reverse order. We'll rearrange the default factor level encoding so that it matches the list above. This is important for ordinal factor Cohen's Kappa calculations.
 
-## Weighted and Unweighted Cohen's for A/B Separately
+```{r recoding}
+# reorder factors in `separate` table
+AB.separate$LIZ <- fct_rev(AB.separate$LIZ)
+AB.separate$KAYCEE <- fct_rev(AB.separate$KAYCEE)
+AB.separate$KATHLEEN <- fct_rev(AB.separate$KATHLEEN)
+str(AB.separate)
 
-For each pair of annotators we calculate Cohen's Kappa (weighted and unweighted). Note that the weight matrix used is as follows:
-
-```{r separate kappa weights, echo=FALSE}
-t <- cohen.kappa(AB.separate[, c('LIZ', 'KATHLEEN')])
-knitr::kable(t$weight,
-             caption="Weights Used for Cohen's Kappa")
+# reorder factors in `together` table
+AB.together$LIZ <- fct_rev(AB.together$LIZ)
+AB.together$KAYCEE <- fct_rev(AB.together$KAYCEE)
+AB.together$KATHLEEN <- fct_rev(AB.together$KATHLEEN)
+str(AB.together)
 ```
 
 
-```{r separate Cohen Kappa}
-liz.kath <- cohen.kappa(AB.separate[, c('LIZ', 'KATHLEEN')])
-knitr::kable(liz.kath$confid, 
-             caption="Liz v. Kathleen Cohen's Kappa (weighted and weighted)",
-             digits = 4)
+# Pairwise Cohen’s Kappas
 
-liz.kay <- cohen.kappa(AB.separate[, c('LIZ', 'KAYCEE')])
-knitr::kable(liz.kay$confid, 
-             caption="Liz v. Kaycee Cohen's Kappa (weighted and weighted)",
-             digits = 4)
+## Weights
 
-kath.kay <- cohen.kappa(AB.separate[, c('KATHLEEN', 'KAYCEE')])
-knitr::kable(kath.kay$confid, 
-             caption="Kathleen v. Kaycee Cohen's Kappa (weighted and weighted)",
-             digits = 4)
+We need to define weights per the note above. Please note that the weights are counter-intuitive: $w_3 = 2$ and $w_2 = 3$. I defer to the cited publications here.
+
+```{r weights}
+w <- matrix(c(0, 2, 3, 2,0,1, 3,1,0), nrow = 3)
+w
+```
+
+
+## Weighted and Unweighted Cohen's for A/B Separately
+
+For each pair of annotators we calculate Cohen's Kappa (Cohen Kappa is below the diagonal and Weighted Kappa is above the diagonal). Note, we get the error message below if we do not specify the argument `w`, that is, the weights:
+
+_"No variance detected in cells 2  1No variance detected in cells 3  2At least one item had no variance.  Try describe(your.data) to find the problem."_
+
+We'll dig into this below. 
+
+```{r separate pairwise cohen}
+pairwise.cohens.sep <- cohen.kappa(AB.separate, w = w)
+
+knitr::kable(pairwise.cohens.sep$cohen.kappa,
+             caption="Weighted and Unweighted Pairwise Cohen's Kappa",
+             digits = 5)
+```
+
+We'll also present 95% confidence intervals around the Cohen's Kappas:
+
+```{r kappa CI}
+liz.kath.ci <- pairwise.cohens.sep$`KATHLEEN LIZ`$confid
+kath.kay.ci <- pairwise.cohens.sep$`KATHLEEN KAYCEE`$confid
+liz.kay.ci <- pairwise.cohens.sep$`LIZ KAYCEE`$confid
+
+knitr::kable(liz.kath.ci, caption='Liz vs. Kathleen 95% Confidence Intervals',
+             digits=4)
+
+knitr::kable(kath.kay.ci, caption='Kaycee vs. Kathleen 95% Confidence Intervals',
+             digits=4)
+
+knitr::kable(liz.kay.ci, caption='Liz vs. Kaycee 95% Confidence Intervals',
+             digits=4)
+```
+
+For completeness, here are the intermediate agreements.
+
+```{r agreement percentages}
+liz.kath.agree <- pairwise.cohens.sep$`KATHLEEN LIZ`$agree
+kath.kay.agree <- pairwise.cohens.sep$`KATHLEEN KAYCEE`$agree
+liz.kay.agree <- pairwise.cohens.sep$`LIZ KAYCEE`$agree
+
+knitr::kable(liz.kath.agree, caption='Liz vs. Kaycee Agreement Percentages',
+             digits=4)
+
+knitr::kable(kath.kay.agree, caption='Liz vs. Kaycee Agreement Percentages',
+             digits=4)
+
+knitr::kable(liz.kay.agree, caption='Liz vs. Kaycee Agreement Percentages',
+             digits=4)
 ```
 
 
 ## Weighted and Unweighted Cohen's for A/B Together
 
-The weight matrix used is as follows:
+The weight matrix used is as shown below. Weights will no affect the computation in the binary case.
 
 ```{r together kappa weights, echo=FALSE}
 t <- cohen.kappa(AB.together[, c('LIZ', 'KATHLEEN')])
@@ -96,24 +186,30 @@ knitr::kable(t$weight,
              caption="Weights Used for Cohen's Kappa")
 ```
 
-
 ```{r together Cohen Kappa}
-liz.kath <- cohen.kappa(AB.together[, c('LIZ', 'KATHLEEN')])
-knitr::kable(liz.kath$confid, 
-             caption="Liz v. Kathleen Cohen's Kappa (weighted and weighted)",
+pairwise.cohens.tog <- cohen.kappa(AB.together)
+
+knitr::kable(pairwise.cohens.tog$cohen.kappa,
+             caption="Cohen's Kappa for A==B",
+             digits=4)
+```
+
+Here are the confidence intervals:
+
+```{r together cohens ci}
+knitr::kable(pairwise.cohens.tog$`KATHLEEN LIZ`$confid,
+             caption="Liz v. Kathleen Cohen's Kappa",
              digits = 4)
 
-
-liz.kay <- cohen.kappa(AB.together[, c('LIZ', 'KAYCEE')])
-knitr::kable(liz.kay$confid, 
-             caption="Liz v. Kaycee Cohen's Kappa (weighted and weighted)",
+knitr::kable(pairwise.cohens.tog$`LIZ KAYCEE`$confid,
+             caption="Liz v. Kaycee Cohen's Kappa",
              digits = 4)
 
-kath.kay <- cohen.kappa(AB.together[, c('KATHLEEN', 'KAYCEE')])
-knitr::kable(kath.kay$confid, 
-             caption="Kathleen v. Kaycee Cohen's Kappa (weighted and weighted)",
+knitr::kable(pairwise.cohens.tog$`KATHLEEN KAYCEE`$confid,
+             caption="Kathleen v. Kaycee Cohen's Kappa",
              digits = 4)
 ```
+
 
 
 # Krippendorff’s alpha
@@ -124,11 +220,17 @@ This is the `kripp.alpha()` function from: [https://cran.r-project.org/web/packa
 
 _"In R (R Core Team, Vienna, Austria) there is the package irr (version 0.84) from Gamer et al. [2], which calculates Fleiss’ K and Krippendorff’s alpha, but both without confidence intervals. There is a small error in the estimation of the coincidence matrix for Krippendorff’s alpha if there are no missing values. In the upcoming actualized version this error will be corrected (personal communication). An R-program for the calculation of Krippendorffs alpha with the standard bootstrap confidence interval as applied by us was written by Gruszczynski and can be downloaded via GitHub [3]."_
 
-# Krippendorff’s alpha A/B Separate 
+## Krippendorff’s alpha A/B Separate 
+
 
 ```{r separate Krippendorff, message=FALSE, warning=FALSE}
-kripp.alpha(t(AB.separate), "nominal")
-kripp.alpha(t(AB.separate), "ordinal")
+AB.sep.nominal <- kripp.alpha(t(AB.separate), "nominal")
+AB.sep.nominal
+print(paste('Full value: ', AB.sep.nominal$value))
+
+AB.sep.ordinal <- kripp.alpha(t(AB.separate), "ordinal")
+AB.sep.ordinal
+print(paste('Full value: ', AB.sep.ordinal$value))
 ```
 
 ## Krippendorff’s alpha A/B Together
@@ -136,7 +238,10 @@ kripp.alpha(t(AB.separate), "ordinal")
 Oridinal and nominal weight matrices will be identical in this case.
 
 ```{r together Krippendorff, message=FALSE, warning=FALSE}
-kripp.alpha(t(AB.together), "nominal")
+AB.together.nominal <- kripp.alpha(t(AB.together), "nominal")
+AB.together.nominal
+
+print(paste('Full value: ', AB.together.nominal$value))
 ```
 
 
@@ -161,7 +266,7 @@ oridinal.alpha <- function(d, w) {
 }
 ```
 
-### A/B Separate, Coded Nominally
+## A/B Separate, Coded Nominally
 
 ```{r separate nominal, message=FALSE, warning=FALSE}
 b <- boot(data = AB.separate, statistic = nominal.alpha, R = 1000)
@@ -170,7 +275,7 @@ plot(b)
 boot.ci(b, type = "perc")
 ```
 
-### A/B Separate, Coded Ordinally
+## A/B Separate, Coded Ordinally
 
 ```{r separate ordinal, message=FALSE, warning=FALSE}
 b <- boot(data = AB.separate, statistic = oridinal.alpha, R = 1000)
@@ -179,10 +284,10 @@ plot(b)
 boot.ci(b, type = "perc")
 ```
 
-### A/B Together, Coded Norminally
+## A/B Together, Coded Norminally
 
 ```{r together nominal, message=FALSE, warning=FALSE}
-b <- boot(data = AAB.together, statistic = nominal.alpha, R = 1000)
+b <- boot(data = AB.together, statistic = nominal.alpha, R = 1000)
 bs
 plot(b)
 boot.ci(b, type = "perc")
